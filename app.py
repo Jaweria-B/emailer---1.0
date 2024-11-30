@@ -5,50 +5,84 @@ from bs4 import BeautifulSoup
 from jinja2 import Template
 import smtplib
 from email.mime.text import MIMEText
+import random
+import streamlit as st
 
-def read_excel(file_path):
-    df = pd.read_excel(file_path)
-    return df
+# Email Template with Randomization
+def generate_dynamic_email(data):
+    greetings = [
+        "Hello {{ company_name }},",
+        "Hi {{ company_name }},",
+        "Greetings {{ company_name }},"  
+    ]
+    
+    openings = [
+        "I noticed your focus on {{ keywords }} while exploring {{ website }}.",
+        "While browsing {{ website }}, I came across your work on {{ keywords }}.",
+        "Your expertise in {{ keywords }} caught my attention on {{ website }}."
+    ]
+    
+    improvements = [
+        "It seems like {{ improvement_area }} could benefit from well-crafted content.",
+        "I believe I could assist in enhancing {{ improvement_area }} with impactful writing.",
+        "There's potential to elevate {{ improvement_area }} with targeted content strategies."
+    ]
+    
+    closings = [
+        "Looking forward to collaborating and helping {{ company_name }} grow.",
+        "Let’s discuss how I can contribute to {{ company_name }}'s success.",
+        "Eager to explore collaboration opportunities with {{ company_name }}."
+    ]
+    
+    closing_statements = [
+        "Best regards,", 
+        "Sincerely,", 
+        "Warm regards,"
+    ]
+    
+    # Combine all components into a Jinja2 template
+    template_string = f"""
+    {random.choice(greetings)}
+    
+    {random.choice(openings)} {random.choice(improvements)}
+    
+    As a freelance writer, I specialize in {{ specialization }} and have experience in {{ relevant_experience }}. Here's a link to some of my work: {{ profile_link }}
+    
+    {random.choice(closings)}
+    
+    {random.choice(closing_statements)}
+    Jaweria
+    """
+    
+    # Render the template with Jinja2
+    jinja_template = Template(template_string)
+    rendered_email = jinja_template.render(data)  # Make sure the data is passed properly
+    
+    return rendered_email
 
-
+# Function to Scrape Website
 def scrape_website(url):
     try:
         response = requests.get(url, timeout=10)
         soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Extract text from the website
         all_text = " ".join([p.get_text() for p in soup.find_all('p')])
         
-        # Analyze text (basic example: find keywords)
+        # Check for keywords
         keywords = ["content", "writing", "blog", "freelance", "editorial"]
         matches = [word for word in keywords if word in all_text.lower()]
         
+        # Default message if no keywords are found
+        if not matches:
+            matches = ["general writing services"]
+        
         return {
             "keywords_found": matches,
-            "content_snippet": all_text[:300]  # First 300 characters
+            "content_snippet": all_text[:300]
         }
     except Exception as e:
         return {"error": str(e)}
 
-
-email_template = """
-Hello {{ company_name }},
-
-I noticed your focus on {{ keywords }} while exploring {{ website }}. It seems like {{ improvement_area }} could benefit from well-crafted content.
-
-As a freelance writer, I specialize in {{ specialization }} and have experience in {{ relevant_experience }}. Here's a link to some of my work: {{ profile_link }}
-
-Looking forward to collaborating and helping {{ company_name }} grow.
-
-Best regards,  
-Jaweria
-"""
-
-def generate_email(data):
-    template = Template(email_template)
-    return template.render(data)
-
-
+# Email Sending Function
 def send_email(to_address, subject, body):
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
@@ -65,26 +99,70 @@ def send_email(to_address, subject, body):
         server.login(from_address, password)
         server.send_message(msg)
 
+# Main App
+st.set_page_config(
+    page_title="Emailer: Automate Personalized Emails",
+    page_icon="📧",
+    layout="centered",
+)
 
-def process_companies(file_path):
-    companies = read_excel(file_path)
+st.title("📧 Emailer: Automate Personalized Emails")
+st.markdown(
+    """
+    **Emailer** is a tool that helps automate personalized email generation and sending, specifically tailored for freelance writers.  
+    *Made with ❤️ by [Jaweria](https://jaweria-batool.vercel.app/).*
+    """
+)
+
+uploaded_file = st.file_uploader("📄 Upload Excel File (Companies List)", type=["xlsx"])
+
+if uploaded_file:
+    st.success("File uploaded successfully! Processing...")
+    
+    # Read Excel
+    companies = pd.read_excel(uploaded_file)
+    st.write("Here are the companies from your file:", companies.head())
+    
     for _, company in companies.iterrows():
         website_data = scrape_website(company['Website URL'])
         
         if "error" in website_data:
-            print(f"Error scraping {company['Website URL']}: {website_data['error']}")
+            st.error(f"Error scraping {company['Website URL']}: {website_data['error']}")
             continue
         
-        email_body = generate_email({
-            "company_name": company['Company Name'],
-            "keywords": ", ".join(website_data['keywords_found']),
-            "website": company['Website URL'],
-            "improvement_area": "expanding blog outreach",  # Example improvement
+        # Prepare email data with fallbacks
+        # email_body = generate_dynamic_email({
+        #     "company_name": company['Company Name'],
+        #     "keywords": ", ".join(website_data.get('keywords_found', [])) or "your expertise",
+        #     "website": company['Website URL'],
+        #     "improvement_area": "expanding blog outreach",
+        #     "specialization": "freelance writing and content creation",
+        #     "relevant_experience": "creating impactful blogs for tech and startups",
+        #     "profile_link": "https://www.linkedin.com/in/jaweria-batool/"
+        # })
+
+        email_data = {
+            "company_name": "Designli",
+            "keywords": "general writing services",
+            "website": "https://designli.co/",
+            "improvement_area": "expanding blog outreach",
             "specialization": "freelance writing and content creation",
             "relevant_experience": "creating impactful blogs for tech and startups",
-            "profile_link": "https://www.linkedin.com/in/jaweria-batool/"  # Replace with dynamic logic
-        })
+            "profile_link": "https://www.linkedin.com/in/jaweria-batool/"
+        }
 
-        send_email(company['Email ID'], "Freelance Writing Opportunity", email_body)
+        email_body = generate_dynamic_email(email_data)
+        print(email_body)
 
-process_companies("./companies.xlsx")
+        
+        st.text_area(f"Email for {company['Company Name']} ({company['Email ID']})", email_body, height=200)
+
+    st.markdown("Once you're ready, run the script to send emails to all listed companies.")
+
+st.markdown(
+    """
+    ### Notes:
+    - Follow [these steps](https://support.google.com/accounts/answer/185833?hl=en) to enable Gmail App Passwords.
+    - Ensure your credentials are stored securely in environment variables.
+    """
+)
