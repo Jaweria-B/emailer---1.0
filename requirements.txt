@@ -1,0 +1,7 @@
+pandas
+requests
+beautifulsoup4
+jinja2
+smtplib  
+streamlit
+python-dotenv
