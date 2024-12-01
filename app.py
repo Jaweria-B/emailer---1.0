@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 import os
 import pandas as pd
 import requests
@@ -7,6 +8,9 @@ import smtplib
 from email.mime.text import MIMEText
 import random
 import streamlit as st
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Email Template with Randomization
 def generate_dynamic_email(data):
@@ -41,13 +45,11 @@ def generate_dynamic_email(data):
     ]
     
     # Combine all components into a Jinja2 template
-    template_string = f"""
-    {random.choice(greetings)}
+    template_string = f"""{random.choice(greetings)}
     
     {random.choice(openings)} {random.choice(improvements)}
     
-    As a freelance writer, I specialize in {{ specialization }} and have experience in {{ relevant_experience }}. Here's a link to some of my work: {{ profile_link }}
-    
+    {"As a freelance writer, I specialize in {{ specialization }} and have experience in {{ relevant_experience }}. Here's a link to some of my work: {{ profile_link }}"}
     {random.choice(closings)}
     
     {random.choice(closing_statements)}
@@ -89,6 +91,10 @@ def send_email(to_address, subject, body):
     from_address = os.getenv("EMAIL_ADDRESS")
     password = os.getenv("EMAIL_PASSWORD")
 
+    print(f"Email Address: {os.getenv('EMAIL_ADDRESS')}")
+    print(f"Password: {os.getenv('EMAIL_PASSWORD')}")
+
+
     msg = MIMEText(body, 'plain')
     msg['From'] = from_address
     msg['To'] = to_address
@@ -122,6 +128,9 @@ if uploaded_file:
     # Read Excel
     companies = pd.read_excel(uploaded_file)
     st.write("Here are the companies from your file:", companies.head())
+
+    # Store the generated emails in a list for display and sending
+    emails_to_send = []
     
     for _, company in companies.iterrows():
         website_data = scrape_website(company['Website URL'])
@@ -131,20 +140,11 @@ if uploaded_file:
             continue
         
         # Prepare email data with fallbacks
-        # email_body = generate_dynamic_email({
-        #     "company_name": company['Company Name'],
-        #     "keywords": ", ".join(website_data.get('keywords_found', [])) or "your expertise",
-        #     "website": company['Website URL'],
-        #     "improvement_area": "expanding blog outreach",
-        #     "specialization": "freelance writing and content creation",
-        #     "relevant_experience": "creating impactful blogs for tech and startups",
-        #     "profile_link": "https://www.linkedin.com/in/jaweria-batool/"
-        # })
-
+        # Prepare email data with fallbacks
         email_data = {
-            "company_name": "Designli",
-            "keywords": "general writing services",
-            "website": "https://designli.co/",
+            "company_name": company['Company Name'],
+            "keywords": ", ".join(website_data.get('keywords_found', [])) or "your expertise",
+            "website": company['Website URL'],
             "improvement_area": "expanding blog outreach",
             "specialization": "freelance writing and content creation",
             "relevant_experience": "creating impactful blogs for tech and startups",
@@ -152,12 +152,26 @@ if uploaded_file:
         }
 
         email_body = generate_dynamic_email(email_data)
-        print(email_body)
+        emails_to_send.append({
+            "to_address": company['Email ID'],
+            "subject": f"Collaboration Opportunity with {company['Company Name']}",
+            "body": email_body
+        })
 
-        
         st.text_area(f"Email for {company['Company Name']} ({company['Email ID']})", email_body, height=200)
 
     st.markdown("Once you're ready, run the script to send emails to all listed companies.")
+
+    # Add a button to send the emails
+    if st.button("Send Emails"):
+        for email in emails_to_send:
+            try:
+                send_email(email['to_address'], email['subject'], email['body'])
+                st.success(f"Email sent to {email['to_address']} successfully!")
+            except Exception as e:
+                st.error(f"Failed to send email to {email['to_address']}: {str(e)}")
+
+    
 
 st.markdown(
     """
